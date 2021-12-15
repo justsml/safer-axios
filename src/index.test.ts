@@ -2,6 +2,9 @@ import { z } from "zod";
 import { esmWrapper } from "./utils/esmWrapper";
 // import { mockAxios } from "./utils/mockAxios";
 import axiosFactory from "./";
+import axios from "axios";
+
+jest.mock("axios");
 
 export const schema_note = z.object({
   note: z.string().min(1).max(50),
@@ -26,28 +29,36 @@ describe("axiosValidationFactory", () => {
   //     });
   // });
 
-  it.skip("can throw on invalid response", () => {
+  it("can throw on invalid response", () => {
     expect.assertions(1);
-    // jest.mock("axios", esmWrapper(mockaxios({ body: { id: 1 } })));
-    const axiosValidator = axiosFactory((data) =>
-      schema_id_and_note.parse(data)
-    );
+    // @ts-ignore
+    axios.get.mockResolvedValue({
+      data: { id: 1 },
+    });
+    const axiosValidator = axiosFactory({
+      response: (data) => schema_id_and_note.parse(data),
+    });
 
-    return axiosValidator(`https://example.local/notes`)
-      .catch((error) => expect(error).toBeInstanceOf(Error));
+    return axiosValidator(`https://example.local/notes`).catch((error) =>
+      expect(error).toBeInstanceOf(Error)
+    );
   });
 
   it("can throw on invalid request body", () => {
     expect.assertions(1);
+    // @ts-ignore
+    axios.put.mockResolvedValue({
+      data: { note: "Dan" },
+    });
+
     const axiosValidator = axiosFactory({
-      response: (data) => schema_id_and_note.parse(data),
+      request: (data) => schema_id_and_note.parse(data),
     });
 
     return axiosValidator(`https://example.local/notes`, {
       method: "PUT",
       data: JSON.stringify({ note: "Dan" }),
-    })
-      .catch((error) => expect(error).toBeInstanceOf(Error));
+    }).catch((error) => expect(error).toBeInstanceOf(Error));
   });
 
   // it("can validate request and response", () => {
