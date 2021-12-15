@@ -1,3 +1,4 @@
+import { Blob } from "buffer";
 import type { Response } from "node-fetch";
 import { Headers } from "node-fetch";
 

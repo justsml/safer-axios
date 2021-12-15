@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
-import type { HeadersInit, RequestInit, Response } from "node-fetch";
+// import type { HeadersInit, RequestInit, Response } from "node-axios";
+import type {
+  AxiosRequestConfig,
+  AxiosRequestHeaders,
+  AxiosResponse,
+  AxiosResponseHeaders,
+} from "axios";
 import { pathToRegexp } from "path-to-regexp";
 import { URL } from "url";
 import { HttpPathRules, Rules } from "..";
@@ -22,7 +28,7 @@ type ValidationCallback = ({
   data: any;
   url: string;
   status?: number;
-  headers?: HeadersInit;
+  headers?: AxiosRequestHeaders | AxiosResponseHeaders;
 }) => void;
 
 type FetchFactoryOptions =
@@ -38,31 +44,31 @@ type FetchFactoryOptions =
  *
  * ### Single Route, response validation
  *
- * Create a fetch wrapper to validate a single **response**.
+ * Create a axios wrapper to validate a single **response**.
  *
  * ```ts
  * const checkUser = (data) => data.user != undefined;
- * const fetch = fetchFactory(checkUser);
- * fetch('/users/1')
+ * const axios = axiosFactory(checkUser);
+ * axios('/users/1')
  *   .then(response => response.json())
  *   .then(data => console.log(data));
  * ```
  *
  * ### Single Route, request validation
  *
- * Create a fetch wrapper to validate a single **response**.
+ * Create a axios wrapper to validate a single **response**.
  *
  * ```ts
  * const checkUser = (data) => data.user != undefined;
- * const fetch = fetchFactory({ request: checkUser });
- * fetch('/users/1', { method: 'POST', body: JSON.stringify({ user: 'Dan' }) })
+ * const axios = axiosFactory({ request: checkUser });
+ * axios('/users/1', { method: 'POST', body: JSON.stringify({ user: 'Dan' }) })
  *   .then(response => response.json())
  *   .then(data => console.log(data));
  * ```
  *
  * ### Multiple Routes
  *
- * Create a fetch wrapper for `/users/:id?` and POST's to `/messages`.
+ * Create a axios wrapper for `/users/:id?` and POST's to `/messages`.
  *
  * ```ts
  * const pathRules = {
@@ -71,13 +77,13 @@ type FetchFactoryOptions =
  *   // matches POST's to `/messages`
  *   `POST:/messages`: { request: messageSchemaCheck },
  * }
- * export default fetchFactory(pathRules);
+ * export default axiosFactory(pathRules);
  * ```
  *
  * @param validator
  * @returns
  */
-export default function fetchFactory<TInput, TOutput>(
+export default function axiosFactory<TInput, TOutput>(
   validator: Rules<TInput, TOutput> | HttpPathRules<TInput, TOutput> | false,
   options?: FetchFactoryOptions
 ) {
@@ -95,10 +101,15 @@ export default function fetchFactory<TInput, TOutput>(
     // We have some path patterns to match!
     pathMatcher = getPathMatcher(validator);
   }
-  return function fetchWrapper(url: string, init: RequestInit = {}) {
-    let _response: Response;
+  /**
+   *   (config: AxiosRequestConfig): AxiosPromise;
+   *   (url: string, config?: AxiosRequestConfig): AxiosPromise;
+   */
+  return function axiosWrapper(url: string, config: AxiosRequestConfig = {}) {
+    let _response: AxiosResponse<any, any> | null = null;
+
     if (pathMatcher !== null) {
-      validator = pathMatcher(url, init.method || "GET");
+      validator = pathMatcher(url, config.method || "GET");
     }
     let requestBodyValidator =
       typeof validator === "object" ? validator.request : undefined;
@@ -109,21 +120,19 @@ export default function fetchFactory<TInput, TOutput>(
         ? validator.response
         : undefined;
 
+        let data: any = null;
     // check request body
     if (requestBodyValidator && typeof requestBodyValidator === "function") {
       try {
+        data = config.data;
         // Currently only JSON is supported.
-        if (typeof init.body === "string") {
-          try {
-            const body = JSON.parse(init.body);
-            if (body) {
-              const isValid = requestBodyValidator(body as any);
-              if (!isValid) throw new TypeError(`Invalid request body`);
-            }
-          } catch (error) {
-            throw error;
+        try {
+          if (typeof data === "string") {
+            data = JSON.parse(data);
+          } else if (typeof data === "object") {
+            data = data;
           }
-        } else {
+        } catch (error) {
           throw new TypeError(
             `Unsupported body type. Validation only supports JSON encoded 'body'.`
           );
@@ -132,44 +141,39 @@ export default function fetchFactory<TInput, TOutput>(
         callback({
           mode: "request",
           error,
-          data: init.body,
+          data,
           url,
-          headers: init.headers,
+          headers: config.headers,
         });
         if (!ignoreErrors) throw error;
       }
     }
-    return import("node-fetch").then(({ default: fetch }) => {
-      return fetch(url, init)
-        .then((response) => {
-          // save response to replay later.
-          _response = response.clone();
-          return response.json() as any as TOutput;
-        })
-        .then((body: TOutput) => {
-          // validate response
-          if (responseValidator && typeof responseValidator === "function") {
-            try {
-              const validatorResult = responseValidator(body as any);
-              if (!validatorResult)
-                throw TypeError(
-                  `Invalid response body: ${JSON.stringify(body)}`
-                );
-            } catch (error) {
-              callback({
-                mode: "response",
-                error,
-                data: init.body,
-                url,
-                headers: _response.headers,
-                status: _response.status,
-              });
-              if (!ignoreErrors) throw error;
-            }
+    return import("axios").then(({ default: axios }) => {
+      return axios(url, config).then((response) => {
+        // save response to replay later.
+        _response = response;
+        // check the response
+        if (responseValidator && typeof responseValidator === "function") {
+          try {
+            const validatorResult = responseValidator(response.data as any);
+            if (!validatorResult)
+              throw TypeError(
+                `Invalid response body: ${JSON.stringify(response.data)}`
+              );
+          } catch (error) {
+            callback({
+              mode: "response",
+              error,
+              data: response.data,
+              url,
+              headers: _response.headers,
+              status: _response.status,
+            });
+            if (!ignoreErrors) throw error;
           }
-          // Replay the request back. (fast since response already buffered.)
-          return _response;
-        });
+        }
+        return response;
+      });
     });
   };
 }
@@ -189,7 +193,7 @@ function getPathMatcher<TInput, TOutput>(
   }));
 
   return (inputPath: string, inputMethod: string = "get") => {
-    inputMethod = (inputMethod).toLowerCase();
+    inputMethod = inputMethod.toLowerCase();
     // Check for URL, extract path if it exists.
     if (urlFragment.test(inputPath)) {
       const url = new URL(inputPath);
@@ -206,12 +210,14 @@ function getPathMatcher<TInput, TOutput>(
 
 function getMethodPrefix(path: string) {
   let verb = (path.replace(/^([a-z-]*):?.*/gi, "$1") || "get").toLowerCase();
-  if (verb.startsWith('http')) verb = 'get';
+  if (verb.startsWith("http")) verb = "get";
   return verb;
 }
 
 function getPathExtracted(path: string) {
-  let verb = (path.replace(/^([a-z-]*):?(.*)$/gi, "$2") || "/////").toLowerCase();
-  if (verb.startsWith('http')) verb = 'get';
+  let verb = (
+    path.replace(/^([a-z-]*):?(.*)$/gi, "$2") || "/////"
+  ).toLowerCase();
+  if (verb.startsWith("http")) verb = "get";
   return verb;
 }

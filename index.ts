@@ -1,4 +1,4 @@
-export { default as fetchValidationFactory } from "./src/fetchValidationFactory";
+export { default } from "./src";
 
 export type ValidateFunction<TInput> = (
   value: TInput,
