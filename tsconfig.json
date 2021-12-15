@@ -9,10 +9,10 @@
     "esModuleInterop": true,
     // "extendedDiagnostics": true,
     "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
+    // "isolatedModules": true,
     // "jsx": "preserve",
     "lib": ["esnext"],
-    "module": "CommonJS",
+    "module": "amd",
     "moduleResolution": "node",
     // "noEmit": true,
     "noFallthroughCasesInSwitch": true,
@@ -26,5 +26,11 @@
     "useUnknownInCatchVariables": false
   },
   "include": ["**/*.ts"],
-  "exclude": ["**/node_modules", "**/.*/", "**/dist"]
+  "exclude": [
+    "**/node_modules",
+    "**/.*/",
+    "**/dist",
+    "jest.config.ts",
+    "**/*.test.ts"
+  ]
 }

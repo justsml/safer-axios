@@ -1,18 +1,30 @@
 {
   "name": "@safer-api/axios",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
-  "type": "module",
   "isLibrary": true,
   "outputFormat": "commonjs",
   "exports": "./dist/index.js",
   "main": "dist/main.js",
   "module": "dist/module.js",
-  "types": "dist/types.d.ts",
+  "types": "dist/index.d.ts",
+  "targets": {
+    "types": false,
+    "main": {
+      "outputFormat": "commonjs",
+      "isLibrary": true
+    },
+    "module": {
+      "outputFormat": "esmodule",
+      "isLibrary": true
+    }
+  },
   "browserslist": "> 0.5%, last 2 versions, not dead",
   "scripts": {
     "watch": "parcel watch",
-    "build": "parcel build",
+    "build": "npx rimraf ./dist/* && npm run build:types && npm run build:bundle",
+    "build:bundle": "parcel build ./index.ts",
+    "build:types": "tsc --declaration --declarationMap --outFile dist/index.js",
     "test": "jest"
   },
   "keywords": [],
