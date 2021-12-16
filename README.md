@@ -1,8 +1,16 @@
 # API Request & Response Runtime Validation
 
-Runtime data validation of HTTP requests.
+**Runtime** data validation of HTTP request & response body.
 
 _For those who put too much trust in TypeScript_ ✨
+
+## Install
+
+```bash
+npm install @safer-api/axios
+
+yarn add @safer-api/axios
+```
 
 ## Examples
 
