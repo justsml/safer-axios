@@ -28,6 +28,7 @@
     "test": "jest"
   },
   "keywords": [],
+  "homepage": "https://github.com/justsml/axios-safely",
   "author": {
     "name": "Dan Levy",
     "url": "https://danlevy.net/"
