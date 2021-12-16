@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
-// import type { HeadersInit, RequestInit, Response } from "node-axios";
 import type {
   AxiosRequestConfig,
   AxiosRequestHeaders,
@@ -31,7 +30,7 @@ type ValidationCallback = ({
   headers?: AxiosRequestHeaders | AxiosResponseHeaders;
 }) => void;
 
-type FetchFactoryOptions =
+type AxiosFactoryOptions =
   | ValidationCallback
   | {
       callback: ValidationCallback;
@@ -85,7 +84,7 @@ type FetchFactoryOptions =
  */
 export default function axiosFactory<TInput, TOutput>(
   validator: Rules<TInput, TOutput> | HttpPathRules<TInput, TOutput> | false,
-  options?: FetchFactoryOptions
+  options?: AxiosFactoryOptions
 ) {
   let callback =
     typeof options === "function" ? options : options?.callback ?? (() => {});
