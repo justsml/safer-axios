@@ -111,10 +111,11 @@ describe("axiosValidationFactory", () => {
   //     .then((_data) => expect(callback).toBeCalledTimes(1));
   // });
 
-  it("can support multiple path-based validators", () => {
+  it("can support multiple path-based validators", async () => {
     expect.assertions(1);
+    
     // @ts-ignore
-    axios.mockResolvedValue(
+    axios.post.mockResolvedValue(
       Promise.resolve({
         data: { id: 1 },
       })
@@ -122,7 +123,7 @@ describe("axiosValidationFactory", () => {
     const callback = jest.fn();
     const axiosValidator = axiosFactory(
       {
-        "POST:/notes": {
+        "POST /notes": {
           request: (data) => schema_note.parse(data),
           response: (data) => schema_id_and_note.parse(data),
         },
@@ -130,15 +131,15 @@ describe("axiosValidationFactory", () => {
       { callback, ignoreErrors: true }
     );
 
-    return axiosValidator(`http://localhost.local/notes`, {
-      method: "POST",
-      data: JSON.stringify({ note: "Dan" }),
-    })
-      .then((_data) => {
-        expect(callback).toBeCalledTimes(1);
-      })
-      .catch((error) => {
-        throw error;
+    try {
+      const _data = await axiosValidator(`http://localhost.local/notes`, {
+        method: "POST",
+        data: JSON.stringify({ bad: "Value" }),
       });
+      console.log('_data', _data);
+      expect(callback).toBeCalledTimes(1);
+    } catch (error) {
+      throw error;
+    }
   });
 });

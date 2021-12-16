@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 import type {
+  Axios,
   AxiosRequestConfig,
   AxiosRequestHeaders,
   AxiosResponse,
   AxiosResponseHeaders,
+  AxiosStatic,
 } from "axios";
+import axios from "axios";
 import { pathToRegexp } from "path-to-regexp";
 import { URL } from "url";
 import { HttpPathRules, Rules } from "..";
@@ -104,7 +107,10 @@ export default function axiosFactory<TInput, TOutput>(
    *   (config: AxiosRequestConfig): AxiosPromise;
    *   (url: string, config?: AxiosRequestConfig): AxiosPromise;
    */
-  return function axiosWrapper(url: string, config: AxiosRequestConfig = {}) {
+  return async function axiosWrapper(
+    url: string,
+    config: AxiosRequestConfig = {}
+  ) {
     let _response: AxiosResponse<any, any> | null = null;
 
     if (pathMatcher !== null) {
@@ -119,7 +125,7 @@ export default function axiosFactory<TInput, TOutput>(
         ? validator.response
         : undefined;
 
-        let data: any = null;
+    let data: any = null;
     // check request body
     if (requestBodyValidator && typeof requestBodyValidator === "function") {
       try {
@@ -136,6 +142,7 @@ export default function axiosFactory<TInput, TOutput>(
             `Unsupported body type. Validation only supports JSON encoded 'body'.`
           );
         }
+        requestBodyValidator(data);
       } catch (error) {
         callback({
           mode: "request",
@@ -147,33 +154,35 @@ export default function axiosFactory<TInput, TOutput>(
         if (!ignoreErrors) throw error;
       }
     }
-    return import("axios").then(({ default: axios }) => {
-      return axios(url, config).then((response) => {
-        // save response to replay later.
-        _response = response;
-        // check the response
-        if (responseValidator && typeof responseValidator === "function") {
-          try {
-            const validatorResult = responseValidator(response.data as any);
-            if (!validatorResult)
-              throw TypeError(
-                `Invalid response body: ${JSON.stringify(response.data)}`
-              );
-          } catch (error) {
-            callback({
-              mode: "response",
-              error,
-              data: response.data,
-              url,
-              headers: _response.headers,
-              status: _response.status,
-            });
-            if (!ignoreErrors) throw error;
-          }
-        }
-        return response;
-      });
-    });
+    // const { default: axios } = await import("axios");
+    const method = (config.method || "get").toLowerCase();
+    const axiosMethod: string = method in axios ? method : "get";
+    // @ts-ignore
+    const response = await axios[axiosMethod!](url, config);
+    
+    // save response to replay later.
+    _response = response;
+    // check the response
+    if (responseValidator && typeof responseValidator === "function") {
+      try {
+        const validatorResult = responseValidator(response.data as any);
+        if (!validatorResult)
+          throw TypeError(
+            `Invalid response body: ${JSON.stringify(response.data)}`
+          );
+      } catch (error) {
+        callback({
+          mode: "response",
+          error,
+          data: response.data,
+          url,
+          headers: _response?.headers,
+          status: _response?.status,
+        });
+        if (!ignoreErrors) throw error;
+      }
+    }
+    return response;
   };
 }
 
