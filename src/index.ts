@@ -209,7 +209,7 @@ function getPathMatcher<TInput, TOutput>(
 }
 
 function getMethodPrefix(path: string) {
-  let verb = (path.replace(/^([a-z-]*):?.*/gi, "$1") || "get").toLowerCase();
+  let verb = (path.replace(/^([A-Z-]*) ?.*/g, "$1") || "get").toLowerCase();
   if (verb.startsWith("http")) verb = "get";
   return verb;
 }
