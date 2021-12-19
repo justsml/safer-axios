@@ -1,16 +1,17 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 import type {
-  Axios,
   AxiosRequestConfig,
   AxiosRequestHeaders,
   AxiosResponse,
   AxiosResponseHeaders,
   AxiosStatic,
 } from "axios";
-import axios from "axios";
+import axios, {Axios} from "axios";
+import { HttpPathRules, Rules } from "index";
 import { pathToRegexp } from "path-to-regexp";
 import { URL } from "url";
-import { HttpPathRules, Rules } from "..";
+
+// import { HttpPathRules, Rules } from "./types";
 
 type RuleMatcher<TInput, TOutput> = (
   path: string,
@@ -103,15 +104,67 @@ export default function axiosFactory<TInput, TOutput>(
     // We have some path patterns to match!
     pathMatcher = getPathMatcher(validator);
   }
+
+  class AxiosWrapper extends Axios {
+    constructor(...args: any[]) {
+      super(...args);
+    }
+    delete<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'delete'});
+    }
+    get<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'get'});
+    }
+    post<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'post'});
+    }
+    put<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'put'});
+    }
+    patch<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'patch'});
+    }
+    head<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'head'});
+    }
+    options<T = any, R = AxiosResponse<T, any>, D = any>(url: string, config?: AxiosRequestConfig<D>): Promise<R> {
+      return axiosWrapper(url, {...config, method: 'options'});
+    }
+  }
+
+
+  return Object.assign(axiosWrapper, new AxiosWrapper(axios.defaults));
+
+  // const axiosArgMapper = (method: string) => (
+  //   url: string | AxiosRequestConfig = {},
+  //   config?: AxiosRequestConfig,
+  // ) => {
+  //   if (typeof url === "string") {
+  //     return {
+  //       url,
+  //       method,
+  //       ...config,
+  //     };
+  //   }
+  //   return url;
+  // }
+
   /**
    *   (config: AxiosRequestConfig): AxiosPromise;
    *   (url: string, config?: AxiosRequestConfig): AxiosPromise;
    */
-  return async function axiosWrapper(
-    url: string,
-    config: AxiosRequestConfig = {}
+  async function axiosWrapper(
+    url: string | AxiosRequestConfig,
+    config: AxiosRequestConfig | undefined = undefined
   ) {
     let _response: AxiosResponse<any, any> | null = null;
+    if (typeof url === "object" && config?.url) {
+      config = url;
+      url = config.url!;
+    } else {
+      config = config || {};
+    }
+    if (typeof url !== 'string') throw Error('Invalid url');
 
     if (pathMatcher !== null) {
       validator = pathMatcher(url, config.method || "GET");
@@ -159,7 +212,7 @@ export default function axiosFactory<TInput, TOutput>(
     const axiosMethod: string = method in axios ? method : "get";
     // @ts-ignore
     const response = await axios[axiosMethod!](url, config);
-    
+
     // save response to replay later.
     _response = response;
     // check the response
@@ -185,6 +238,7 @@ export default function axiosFactory<TInput, TOutput>(
     return response;
   };
 }
+
 
 const urlFragment = /^([a-z-]+:)?\/\//i;
 

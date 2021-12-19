@@ -1,19 +1,19 @@
 import { z } from "zod";
 // import { esmWrapper } from "./utils/esmWrapper";
 // import { mockAxios } from "./utils/mockAxios";
-import axiosFactory from "./";
+import axiosFactory from "./index";
 import axios from "axios";
 
 jest.mock("axios");
 
 export const schema_note = z.object({
-  note: z.string().min(1).max(50),
-});
+  note: z.string().min(1).max(50).nonempty(),
+}).strict();
 
 export const schema_id_and_note = z.object({
-  id: z.number().min(1),
-  note: z.string().min(1).max(50),
-});
+  id: z.number().min(1).positive(),
+  note: z.string().min(1).max(50).nonempty(),
+}).strict();
 
 describe("axiosValidationFactory", () => {
   // it("can handle valid response", () => {
@@ -36,7 +36,7 @@ describe("axiosValidationFactory", () => {
       data: { id: 1 },
     });
     const axiosValidator = axiosFactory({
-      response: (data) => schema_id_and_note.parse(data),
+      response: (data: any) => schema_id_and_note.parse(data),
     });
 
     return axiosValidator(`https://example.local/notes`).catch((error) =>
@@ -52,13 +52,13 @@ describe("axiosValidationFactory", () => {
     });
 
     const axiosValidator = axiosFactory({
-      request: (data) => schema_id_and_note.parse(data),
+      request: (data: any) => schema_id_and_note.parse(data),
     });
 
     return axiosValidator(`https://example.local/notes`, {
       method: "PUT",
       data: JSON.stringify({ note: "Dan" }),
-    }).catch((error) => expect(error).toBeInstanceOf(Error));
+    }).catch((error: any) => expect(error).toBeInstanceOf(Error));
   });
 
   // it("can validate request and response", () => {
@@ -113,7 +113,7 @@ describe("axiosValidationFactory", () => {
 
   it("can support multiple path-based validators", async () => {
     expect.assertions(1);
-    
+
     // @ts-ignore
     axios.post.mockResolvedValue(
       Promise.resolve({
@@ -124,15 +124,15 @@ describe("axiosValidationFactory", () => {
     const axiosValidator = axiosFactory(
       {
         "POST /notes": {
-          request: (data) => schema_note.parse(data),
-          response: (data) => schema_id_and_note.parse(data),
+          request: (data: any) => schema_note.parse(data),
+          response: (data: any) => schema_id_and_note.parse(data),
         },
       },
       { callback, ignoreErrors: true }
     );
 
     try {
-      const _data = await axiosValidator(`http://localhost.local/notes`, {
+      const _data = await axiosValidator.post({
         method: "POST",
         data: JSON.stringify({ bad: "Value" }),
       });
