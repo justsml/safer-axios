@@ -107,7 +107,7 @@ export default saferAxios({
 
 ### Step 2/2: Replace `axios` calls with new `saferAxios` wrapper
 
-Use the module exported with `saferAxios(pathConfig)` just as you would `axios(url, config)`.
+Use the module exported with `saferAxios(pathConfig)` just as you would `axios(url, config)`, `axios.get(url, config)`, etc.
 
 ```ts
 // `./src/modules/notes.js`

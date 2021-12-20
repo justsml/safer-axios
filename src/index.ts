@@ -6,8 +6,10 @@ import type {
   AxiosResponse,
   AxiosResponseHeaders,
   AxiosStatic,
+  Method,
 } from "axios";
 import axios from "axios";
+import debug from "debug";
 import { pathToRegexp } from "path-to-regexp";
 import { URL } from "url";
 import { HttpPathRules, Rules } from "..";
@@ -87,36 +89,47 @@ type AxiosFactoryOptions =
  */
 export default function axiosFactory<TInput, TOutput>(
   validator: Rules<TInput, TOutput> | HttpPathRules<TInput, TOutput> | false,
-  options?: AxiosFactoryOptions
+  options?: AxiosFactoryOptions & AxiosRequestConfig<TInput>
 ) {
+  const log = debug("safer-axios");
+  const instance = axios.create(options);
+  log("Creating base axios instance");
   let callback =
     typeof options === "function" ? options : options?.callback ?? (() => {});
   let ignoreErrors = typeof options === "object" ? options.ignoreErrors : false;
-  let pathMatcher: RuleMatcher<TInput, TOutput> | null = null;
+  let findHandlerByPath: RuleMatcher<TInput, TOutput> | null = null;
+
+  log(`options: ${JSON.stringify(options)}`);
 
   // Check for path matcher input
   if (
     typeof validator === "object" &&
+    Object.keys(validator).length > 0 &&
     !validator.request &&
     !validator.response
   ) {
+    log("mode: path map found: ", validator);
     // We have some path patterns to match!
-    pathMatcher = getPathMatcher(validator);
+    findHandlerByPath = getPathMatcher(validator);
+    log("mode: path map processed");
   }
-  /**
-   *   (config: AxiosRequestConfig): AxiosPromise;
-   *   (url: string, config?: AxiosRequestConfig): AxiosPromise;
-   */
-  return async function axiosWrapper(
-    url: string,
-    config: AxiosRequestConfig = {}
-  ) {
-    let _response: AxiosResponse<any, any> | null = null;
 
-    if (pathMatcher !== null) {
-      validator = pathMatcher(url, config.method || "GET");
+  function getHandlersByPath(config: AxiosRequestConfig<any>) {
+    const log = debug("axios-factory:getHandlersByPath");
+    const request = config;
+    let { url, method = "get" } = request;
+    method = (method || "get").toLowerCase() as Method;
+    const parsedUrl = new URL(url!);
+    const pathName = parsedUrl.pathname;
+    log(`Received path info: ${method} ${pathName}`);
+
+    // Check for path matcher
+    if (findHandlerByPath) {
+      validator = findHandlerByPath(pathName, method);
+      log(`Matched handler(s) in path map!`);
     }
-    let requestBodyValidator =
+
+    let requestValidator =
       typeof validator === "object" ? validator.request : undefined;
     let responseValidator =
       typeof validator === "function"
@@ -124,66 +137,81 @@ export default function axiosFactory<TInput, TOutput>(
         : typeof validator === "object"
         ? validator.response
         : undefined;
+    log(`Request validator? ${Boolean(requestValidator)}`);
+    log(`Response validator? ${Boolean(responseValidator)}`);
+    return { requestValidator, responseValidator };
+  }
 
-    let data: any = null;
-    // check request body
-    if (requestBodyValidator && typeof requestBodyValidator === "function") {
-      try {
-        data = config.data;
-        // Currently only JSON is supported.
-        try {
-          if (typeof data === "string") {
-            data = JSON.parse(data);
-          } else if (typeof data === "object") {
-            data = data;
-          }
-        } catch (error) {
-          throw new TypeError(
-            `Unsupported body type. Validation only supports JSON encoded 'body'.`
-          );
-        }
-        requestBodyValidator(data);
-      } catch (error) {
-        callback({
-          mode: "request",
-          error,
-          data,
-          url,
-          headers: config.headers,
-        });
-        if (!ignoreErrors) throw error;
-      }
-    }
-    // const { default: axios } = await import("axios");
-    const method = (config.method || "get").toLowerCase();
-    const axiosMethod: string = method in axios ? method : "get";
-    // @ts-ignore
-    const response = await axios[axiosMethod!](url, config);
+  instance.interceptors.request.use(function requestValidator(config) {
+    let { requestValidator } = getHandlersByPath(config);
+
+    checkRequestValidator();
     
-    // save response to replay later.
-    _response = response;
-    // check the response
-    if (responseValidator && typeof responseValidator === "function") {
-      try {
-        const validatorResult = responseValidator(response.data as any);
-        if (!validatorResult)
-          throw TypeError(
-            `Invalid response body: ${JSON.stringify(response.data)}`
-          );
-      } catch (error) {
-        callback({
-          mode: "response",
-          error,
-          data: response.data,
-          url,
-          headers: _response?.headers,
-          status: _response?.status,
-        });
-        if (!ignoreErrors) throw error;
+    return config;
+    function checkRequestValidator() {
+      let data = config.data;
+      if (requestValidator && typeof requestValidator === "function") {
+        try {
+          // Currently only JSON is supported.
+          try {
+            if (typeof data === "string") {
+              data = JSON.parse(data);
+            } else if (typeof data === "object") {
+              data = data;
+            }
+          } catch (error) {
+            throw new TypeError(
+              `Unsupported body type. Validation only supports JSON encoded 'body'.`
+            );
+          }
+          return requestValidator(data);
+        } catch (error) {
+          callback({
+            mode: "request",
+            error,
+            data,
+            url: config.url!,
+            headers: config.headers,
+          });
+          if (!ignoreErrors) throw error;
+        }
       }
     }
+  });
+
+  instance.interceptors.response.use(function responseValidator(response) {
+    let { responseValidator } = getHandlersByPath(response.config);
+
+    checkResponseValidator();
+
     return response;
-  };
+
+    function checkResponseValidator() {
+      if (responseValidator && typeof responseValidator === "function") {
+        let data = response.data;
+        try {
+          const validatorResult = responseValidator(data as any);
+          if (!validatorResult)
+            throw TypeError(`Invalid response body: ${JSON.stringify(data)}`);
+        } catch (error) {
+          callback({
+            mode: "response",
+            error,
+            data: data,
+            status: response.status,
+            url: response.request.url!,
+            headers: response.headers,
+          });
+          if (!ignoreErrors) throw error;
+        }
+      }
+    }
+  }, function (error) {
+    // Do something with request error
+    return Promise.reject(error);
+  });
+
+  return instance;
 }
 
 const urlFragment = /^([a-z-]+:)?\/\//i;
@@ -208,11 +236,11 @@ function getPathMatcher<TInput, TOutput>(
       inputPath = url.pathname;
     }
 
-    const matchingPath = pathMatchers.find(({ pattern }) =>
-      pattern.test(inputPath)
+    const matchingPath = pathMatchers.find(({ pattern, method }) =>
+      pattern.test(inputPath) && inputMethod === method
     );
     const { path, key, method } = matchingPath || {};
-    return path !== undefined && inputMethod === method ? rules[key!] : false;
+    return path !== undefined ? rules[key!] : false;
   };
 }
 
@@ -224,7 +252,7 @@ function getMethodPrefix(path: string) {
 
 function getPathExtracted(path: string) {
   let verb = (
-    path.replace(/^([a-z-]*):?(.*)$/gi, "$2") || "/////"
+    path.replace(/^([a-z-]*) ?(.*)$/gi, "$2") || "/////"
   ).toLowerCase();
   if (verb.startsWith("http")) verb = "get";
   return verb;
