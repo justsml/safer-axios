@@ -11,8 +11,6 @@ The `@safer-api/axios` library lets you define request & response interceptors b
 
 While Axios provides interceptors to process requests and responses, it has no elegant way to do so conditionally per URL.
 
-It's similar in concept to Express Server/Router. You provide route handlers by path & method. So a `GET /some/thing/` would be handled by something like: `app.get('/some/thing', respondWithTheThing)`.
-
 ### Example `@safer-api/axios` 'validation router'
 
 ```ts
@@ -29,6 +27,8 @@ const axiosNotesApi = saferAxios({
 ```
 
 [See complete example.](#example)
+
+It's similar in concept to Express Server/Router. You provide route handlers by path & method. So a `GET /some/thing/` would be handled by something like: `app.get('/some/thing', respondWithTheThing)`.
 
 ## Install
 
@@ -115,10 +115,10 @@ import axiosNotesApi from './src/services/notes'
 
 export const listNotes = () => axiosNotesApi('/api/notes');
 
-export const createNote = (data) => 
+export const createNote = (data) =>
   axiosNotesApi('/api/notes', {method: 'post', data});
 
-export const updateNote = (id, data) => 
+export const updateNote = (id, data) =>
   axiosNotesApi(`/api/notes/${id}`, {method: 'post', data});
 ```
 

@@ -1,18 +1,15 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 import type {
-  Axios,
   AxiosRequestConfig,
   AxiosRequestHeaders,
-  AxiosResponse,
   AxiosResponseHeaders,
-  AxiosStatic,
   Method,
 } from "axios";
+import type { HttpPathRules, Rules } from "../index";
 import axios from "axios";
 import debug from "debug";
 import { pathToRegexp } from "path-to-regexp";
 import { URL } from "url";
-import { HttpPathRules, Rules } from "..";
 
 type RuleMatcher<TInput, TOutput> = (
   path: string,
@@ -213,6 +210,7 @@ export default function axiosFactory<TInput, TOutput>(
 
   return instance;
 }
+
 
 const urlFragment = /^([a-z-]+:)?\/\//i;
 

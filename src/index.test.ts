@@ -6,13 +6,13 @@ import { z } from "zod";
 import axiosFactory from "./";
 
 export const schema_note = z.object({
-  note: z.string().min(1).max(50),
-});
+  note: z.string().min(1).max(50).nonempty(),
+}).strict();
 
 export const schema_id_and_note = z.object({
-  id: z.number().min(1),
-  note: z.string().min(1).max(50),
-});
+  id: z.number().min(1).positive(),
+  note: z.string().min(1).max(50).nonempty(),
+}).strict();
 
 let mockAx: MockAdapter;
 mockAx = new MockAdapter(axios);
@@ -39,7 +39,7 @@ describe("axiosValidationFactory", () => {
     mockAx.onGet("https://example.local/notes").reply(200, { invalid: `data` });
 
     const axiosValidator = axiosFactory({
-      response: (data) => schema_id_and_note.parse(data),
+      response: (data: any) => schema_id_and_note.parse(data),
     });
 
     return axiosValidator(`https://example.local/notes`).catch((error) =>
@@ -53,7 +53,7 @@ describe("axiosValidationFactory", () => {
     mockAx.onPut("https://example.local/notes").reply(200, { note: "Dan" });
 
     const axiosValidator = axiosFactory({
-      request: (data) => schema_id_and_note.parse(data),
+      request: (data: any) => schema_id_and_note.parse(data),
     });
 
     return axiosValidator(`https://example.local/notes`, {
